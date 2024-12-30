@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+  <style type="text/css">
+    body, html { width: 100%; height: 100%; margin: 0; font-family: "微软雅黑"; font-size: 14px; }
+    #map { height: 100%; }
+    #searchBox { position: absolute; top: 10px; left: 10px; z-index: 10; }
+    #searchInput { width: 300px; padding: 10px; }
+    #searchButton { padding: 10px; }
+    #searchResultPanel { width: 150px; height: auto; display: none; border: 1px solid #C0C0C0; }
+  </style>
+  <title>百度地图 - 搜索与绘制工具</title>
+  <script type="text/javascript" src="http://api.map.baidu.com/api?v=3.0&ak=QO7PgCgYhKk4VkK0hkyXR0YYztRuDYXM"></script>             
+  <script type="text/javascript" src="http://api.map.baidu.com/library/DrawingManager/1.4/src/DrawingManager_min.js"></script>             
+  <link rel="stylesheet" href="http://api.map.baidu.com/library/DrawingManager/1.4/src/DrawingManager_min.css"  />
+</head>
+<body>
+  <div id="searchBox">
+    <input type="text" id="suggestId" size="20" value="" style="width: 300px;" placeholder="请输入地址"/>
+    <button id="searchButton" onclick="toggleDrawingMode()">切换绘制模式</button>
+  </div>
+  <div id="map" style="height: 100%;"></div>
+   <div id="searchResultPanel" style="border: 1px solid #C0C0C0; width: 150px; height: auto; display: none;"></div>
+
+  <script type="text/javascript">
+    var map = new BMap.Map('map');
+    map.setMapType(BMAP_HYBRID_MAP);
+
+    var initialPoint = new BMap.Point(114.365248, 30.5336);
+    map.centerAndZoom(initialPoint, 5); // 设置一个更合适的初始缩放级别
+    map.enableScrollWheelZoom();
+
+    var ac = new BMap.Autocomplete({
+      "input": "suggestId",
+      "location": map
+    });
+
+    ac.addEventListener("onhighlight", function(e) {
+      var str = "";
+      var _value = e.fromitem.value;
+      var value = "";
+      if (e.fromitem.index > -1) {
+        value = _value.province + _value.city + _value.district + _value.street + _value.business;
+      }    
+      str = "index = " + e.fromitem.index + "<br />value = " + value;
+      document.getElementById("searchResultPanel").style.display = "block";
+      document.getElementById("searchResultPanel").innerHTML = str;
+    });
+
+    ac.addEventListener("onconfirm", function(e) {
+      var _value = e.item.value;
+      var address = _value.province + _value.city + _value.district + _value.street + _value.business;
+      document.getElementById("searchResultPanel").innerHTML = "onconfirm<br />index = " + e.item.index + "<br />myValue = " + address;
+      searchPlace(address);
+    });
+
+    function searchPlace(address) {
+      map.clearOverlays();    // 清除地图上所有覆盖物
+      function myFun() {
+        var pp = local.getResults().getPoi(0).point;    // 获取第一个智能搜索的结果
+        map.centerAndZoom(pp, 16); // 设置缩放级别为16
+        map.addOverlay(new BMap.Marker(pp));    // 添加标注
+      }
+      var local = new BMap.LocalSearch(map, { // 智能搜索
+        onSearchComplete: myFun
+      });
+      local.search(address);
+    }
+
+    var drawingManager = new BMapLib.DrawingManager(map, {
+      isOpen: false,
+      enableDrawingTool: true,
+      enableCalculate: true,
+      drawingToolOptions: {
+        anchor: BMAP_ANCHOR_TOP_RIGHT,
+        offset: new BMap.Size(5, 5),
+        drawingModes: [BMAP_DRAWING_RECTANGLE]
+      }
+    });
+
+    var overlays = []; // 用于存储所有绘制的覆盖物
+    var infoWindow;
+
+    drawingManager.addEventListener('overlaycomplete', function(e) {
+      if (overlays.length > 0) {
+        for (var i = 0; i < overlays.length; i++) {
+          map.removeOverlay(overlays[i]);
+        }
+        overlays = [];
+      }
+
+      var newOverlay = e.overlay;
+      overlays.push(newOverlay);
+
+      var area = e.calculate;
+      var ne = newOverlay.getBounds().getNorthEast();
+      var sw = newOverlay.getBounds().getSouthWest();
+
+      if (area > 5000000) { // 五百万平方米
+        alert('您框选的区域面积过大，请重新框选。');
+        map.removeOverlay(newOverlay);
+        drawingManager.close(true);
+        return;
+      } else {
+        showCoordinates(area, ne.lat, ne.lng, sw.lat, sw.lng);
+      }
+
+      drawingManager.close(true);
+    });
+
+
+     function showCoordinates(area, neLat, neLng, swLat, swLng) {
+      if (infoWindow) {
+        infoWindow.close();
+      }
+      var contentString = 
+        'Area: ' + area + '<br>' +
+        'North East: ' + neLat + ', ' + neLng + '<br>' +
+        'South West: ' + swLat + ', ' + swLng + '<br> '+ '<br>' ;
+
+      // 创建按钮并设置样式
+      var button = document.createElement("button");
+      button.innerHTML = "Launch RSChatGPT";
+      button.style = "padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;";
+      button.onclick = function() {
+        launchRSChatGPT(neLat, neLng, swLat, swLng);
+      };
+
+      // 将按钮添加到信息窗体中
+      var infoWindowDiv = document.createElement("div");
+      infoWindowDiv.innerHTML = contentString;
+      infoWindowDiv.appendChild(button);
+      infoWindow = new BMap.InfoWindow(infoWindowDiv, {
+        width: 500,
+        height: 150, // 调整高度以适应按钮
+      });
+      var centerPoint = new BMap.Point((neLng + swLng) / 2, (neLat + swLat) / 2);
+      map.openInfoWindow(infoWindow, centerPoint);
+    }
+
+
+    function launchRSChatGPT(neLat, neLng, swLat, swLng) {
+      var url = "http://115.156.91.250:7860/?LTlat=" + encodeURIComponent(neLat) + "&LTlon=" + encodeURIComponent(neLng) + "&RBlat=" + encodeURIComponent(swLat) + "&RBlon=" + encodeURIComponent(swLng);
+      window.location.assign(url);
+    }
+
+ function toggleDrawingMode() {
+      if (!drawingManager.isOpen) {
+        drawingManager.setDrawingMode(BMAP_DRAWING_RECTANGLE); // 设置绘制模式为矩形
+        drawingManager.open();
+      } else {
+        drawingManager.close(true);
+      }
+    }
+
+    document.getElementById('suggestId').onkeydown = function(e) {
+      var theEvent = e || window.event;
+      var code = theEvent.keyCode || theEvent.which || theEvent.charCode;
+      if (code == 13) {
+        searchPlace(document.getElementById('suggestId').value);
+      }
+    };
+
+    function zoomIn() {
+      const currentZoom = map.getZoom();
+      const newZoom = currentZoom + 3;
+      console.log("zoomIncrement:", newZoom);
+      map.setZoom(newZoom);
+      if (newZoom < 16) {
+        setTimeout(zoomIn, 500);
+      } else {
+        map.setMapType(BMAP_HYBRID_MAP);
+      }
+    }
+
+    setTimeout(zoomIn, 1000);
+  </script>
+</body>
+</html>

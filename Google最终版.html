@@ -1,0 +1,208 @@
+<!doctype html>
+<!--
+ @license
+ Copyright 2019 Google LLC. All Rights Reserved.
+ SPDX-License-Identifier: Apache-2.0
+-->
+<html>
+  <head>
+  <style>
+  #map {
+  height: 100%;
+}
+  html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#place-autocomplete-card {
+  background-color: #fff;
+  border-radius: 5px;
+  box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px;
+  margin: 10px;
+  padding: 5px;
+  font-family: Roboto, sans-serif;
+  font-size: large;
+  font-weight: bold;
+}
+
+gmp-place-autocomplete {
+  width: 300px;
+}
+
+#infowindow-content .title {
+  font-weight: bold;
+}
+
+#map #infowindow-content {
+  display: inline;
+}
+
+
+  </style>
+    <title>Place Autocomplete map</title>
+
+    <!-- jsFiddle will insert css and js -->
+  </head>
+  <body>
+    <div class="place-autocomplete-card" id="place-autocomplete-card">
+      <p>Search for a place here:</p>
+    </div>
+    <div id="map"></div>
+
+    <!-- prettier-ignore -->
+    <script>(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})
+        ({key: "AIzaSyBFGRxkamVUdvQ4TtZfyIkVjuNkWP12T6o", v: "beta",callback:'initMap'});</script>
+ 
+ <script>
+ 
+ let map;
+let marker;
+let infoWindow;
+function showAlert(neLat, neLng, swLat, swLng) {
+  alert('Rectangle Coordinates:\n' +
+        'North East: (' + neLat + ', ' + neLng + ')\n' +
+        'South West: (' + swLat + ', ' + swLng + ')');
+
+//将对应的框经纬度输入主网页
+window.location.assign("http://115.156.91.250:7860/?&LTlat="+neLat+"&LTlon="+swLng+"&RBlat="+swLat+"&RBlon="+neLng);
+}
+
+async function initMap() {
+  // Request needed libraries.
+  //@ts-ignore
+  const [{ Map }, { AdvancedMarkerElement }] = await Promise.all([
+    google.maps.importLibrary("marker"),
+    google.maps.importLibrary("places"),
+    google.maps.importLibrary("drawing"),
+  ]);
+
+  // Initialize the map.
+   map = new google.maps.Map(document.getElementById("map"), {
+    center: {  lat: 30.53786, lng: 114.365248 },
+    zoom: 2,mapTypeId: "hybrid",mapId: "4504f8b37365c3d0",mapTypeControl: false,});
+
+  //@ts-ignore
+  const placeAutocomplete = new google.maps.places.PlaceAutocompleteElement();
+
+  //@ts-ignore
+  placeAutocomplete.id = "place-autocomplete-input";
+
+  const card = document.getElementById("place-autocomplete-card");
+
+  //@ts-ignore
+  card.appendChild(placeAutocomplete);
+  map.controls[google.maps.ControlPosition.TOP_LEFT].push(card);
+  // Create the marker and infowindow
+  marker = new google.maps.marker.AdvancedMarkerElement({
+    map,
+  });
+  infoWindow = new google.maps.InfoWindow({});
+  // Add the gmp-placeselect listener, and display the results on the map.
+  //@ts-ignore
+  placeAutocomplete.addEventListener("gmp-placeselect", async ({ place }) => {
+    await place.fetchFields({
+      fields: ["displayName", "formattedAddress", "location"],
+    });
+    // If the place has a geometry, then present it on a map.
+    if (place.viewport) {
+      map.fitBounds(place.viewport);
+    } else {
+      map.setCenter(place.location);
+      map.setZoom(17);
+    }
+
+    let content =
+      '<div id="infowindow-content">' +
+      '<span id="place-displayname" class="title">' +
+      place.displayName +
+      "</span><br />" +
+      '<span id="place-address">' +
+      place.formattedAddress +
+      "</span>" +
+      "</div>";
+
+    updateInfoWindow(content, place.location);
+    marker.position = place.location;
+  });
+
+  const drawingManager = new google.maps.drawing.DrawingManager({
+    drawingMode: google.maps.drawing.OverlayType.MARKER,
+    drawingControl: true,
+    drawingControlOptions: {
+      position: google.maps.ControlPosition.TOP_CENTER,
+      drawingModes: [ google.maps.drawing.OverlayType.RECTANGLE,]}});
+
+  drawingManager.setMap(map);
+  infoWindow = new google.maps.InfoWindow();
+
+  google.maps.event.addListener(drawingManager, 'rectanglecomplete', function(event) {
+
+   drawingManager.setDrawingMode(null);
+
+
+          if (this.event) {
+            this.event.setMap(null);
+          }
+          this.event = event;
+
+
+   const ne = event.getBounds().getNorthEast(); 
+   const sw = event.getBounds().getSouthWest();
+   const contentString =
+   
+    "<p>New north-east corner: " +
+    ne.lat() +
+    ", " +
+    ne.lng() +
+    "<br>" +
+    "New south-west corner: " +
+    sw.lat() +
+    ", " +
+    sw.lng()+"</p>"+
+    '<button onclick="showAlert(' + ne.lat() + ',' + ne.lng() + ',' + sw.lat() + ',' + sw.lng() + ')">Show Coordinates</button>';
+
+    infoWindow.setContent(contentString);
+
+   infoWindow.setPosition(ne);
+  infoWindow.open(map);
+
+});
+  setTimeout(zoomIn, 1000);
+  function zoomIn() {
+        const currentZoom = map.getZoom();
+        const newZoom = currentZoom + 1; // 避免超过目标缩放级别
+     console.log("zoomIncrement:",newZoom);
+        map.setZoom(newZoom);
+
+        // 如果还没有达到目标缩放级别，则继续缩放
+        if (newZoom < 16) {
+          setTimeout(zoomIn, 200);
+          map.setMapTypeId('satellite')
+        }
+        else{map.setMapTypeId('hybrid')}
+      } 
+  
+  
+}
+
+// Helper function to create an info window.
+function updateInfoWindow(content, center) {
+  infoWindow.setContent(content);
+  infoWindow.setPosition(center);
+  infoWindow.open({
+    map,
+    anchor: marker,
+    shouldFocus: false,
+  });
+}
+
+initMap();
+ </script>
+ 
+ </body>
+  
+  
+</html>
